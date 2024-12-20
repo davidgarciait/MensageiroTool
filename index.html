@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mensageiro</title>
+	<link rel="icon" type="image/ico" sizes="32x32" href="mensageiro.ico">
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar h2 {
+			text-align: center;
+			padding: 1rem;
+			margin: 0;
+			background-color: #ff9800;
+			color: #fff;
+			font-size: 1.2rem; /* Tamanho de fonte consistente */
+			width: relative;
+		}
+
+		.chat-header {
+			padding: 1rem;
+			background-color: #ff9800;
+			color: white;
+			text-align: center;
+			font-weight: bold;
+			font-size: 1.2rem; /* Mesmo tamanho de fonte para garantir a consistência */
+		}
+
+		.sidebar {
+			width: 25%;
+			background-color: #f3f3f3;
+			border-right: 1px solid #ccc;
+			overflow-y: auto; /* Mantém o scroll somente quando necessário */
+			height: 100vh; /* Faz a barra lateral ocupar 100% da altura da viewport */
+			box-sizing: border-box; /* Garante que padding e border sejam inclusos no tamanho total */
+		}
+
+		.conversation {
+			padding: 0.8rem;
+			border-bottom: 1px solid #ccc;
+			cursor: pointer;
+		}
+
+		.conversation.active {
+			background-color: #ff9800; /* Azul */
+			color: white; /* Texto branco */
+		}
+
+		.conversation:hover {
+			background-color: #e6e6e6;
+		}
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 1rem;
+            background-color: #ff9800;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+        }
+
+		.messages {
+			flex: 1;
+			padding: 1rem;
+			overflow-y: auto;
+			background-color: #f9f9f9;
+			display: flex; /* Flex container */
+			flex-direction: column; /* Organiza os itens em coluna */
+			gap: 0.5rem; /* Espaçamento entre as mensagens */
+		}
+
+		.message {
+			margin: 0; /* Remove margens que possam causar desalinhamento */
+			padding: 0.8rem;
+			border-radius: 10px;
+			display: block; /* Garante que cada mensagem ocupe uma linha */
+			max-width: 80%; /* Limita a largura das mensagens */
+			word-wrap: break-word; /* Quebra palavras longas */
+		}
+
+		.sent {
+			background-color: #ff9800;
+			align-self: flex-end; /* Alinha as mensagens enviadas à direita */
+			text-align: left;
+			opacity: 0.8;
+		}
+
+		.received {
+			background-color: #e9ecef;
+			align-self: flex-start; /* Alinha as mensagens recebidas à esquerda */
+			text-align: left;
+		}
+
+		.message_recipient {
+            font-size: 0.7rem;
+			opacity: 0.5;
+        }
+		
+		.date-section {
+			text-align: center;
+			font-size: 1.2rem;
+			font-weight: bold;
+			color: #ff9800;
+			margin: 1rem 0;
+			padding: 0.5rem;
+			background-color: #f0f0f0;
+			border-radius: 10px;
+		}
+
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Conversas</h2>
+        <div id="conversation-list"></div>
+    </div>
+
+    <div class="content">
+        <div class="chat-header" id="chat-header">Selecione uma conversa</div>
+        <div class="messages" id="messages"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000/api/files';
+
+        // Carregar a lista de conversas (ficheiros)
+        async function loadConversations() {
+            try {
+                const response = await fetch(API_BASE_URL);
+                if (!response.ok) throw new Error('Erro ao carregar a lista de conversas.');
+                
+                const files = await response.json(); // Lista de ficheiros
+                const conversations = {};
+
+                for (const file of files) {
+                    const messages = await loadMessages(file);
+                    conversations[file.split('.txt')[0]] = messages;
+                }
+
+                return conversations;
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao carregar conversas.');
+                return {};
+            }
+        }
+
+		// Carregar as mensagens de um ficheiro
+		async function loadMessages(filename) {
+			try {
+				const response = await fetch(`${API_BASE_URL}/${filename}`);
+				if (!response.ok) throw new Error(`Erro ao carregar o ficheiro: ${filename}`);
+
+				const content = await response.text();
+				const lines = content.split('\n');
+
+				const messages = lines.map(line => {
+					line = line.trim(); // Remover espaços em branco extras e \r no final
+
+					// Regex ajustado para capturar data, nome e mensagem
+					const match = line.match(/^\[([^\]]+)\]\[([^\]]+?)(?: \| \d+)?\](.*)$/);
+
+					if (match) {
+						const [, datetime, sender, message] = match;
+						const [date, time] = datetime.split(';'); // Separar data e hora
+						return { sender, time: `${date} ${time}`, message: message.trim() };
+					}
+					return null; // Ignorar linhas mal formatadas
+				}).filter(msg => msg !== null);
+				return messages;
+			} catch (error) {
+				console.error(`Erro ao carregar mensagens de ${filename}:`, error);
+				alert(`Erro ao carregar mensagens de ${filename}.`);
+				return [];
+			}
+		}
+
+        // Renderizar a lista de conversas
+        function renderConversations(conversations) {
+            const conversationList = document.getElementById('conversation-list');
+            conversationList.innerHTML = ''; // Limpar lista existente
+
+            Object.keys(conversations).forEach(name => {
+                const div = document.createElement('div');
+                div.classList.add('conversation');
+                div.textContent = name;
+                div.onclick = () => loadChat(name, conversations[name]);
+                conversationList.appendChild(div);
+            });
+        }
+
+		async function loadChat(name, existingMessages) {
+			const chatHeader = document.getElementById('chat-header');
+			const messagesContainer = document.getElementById('messages');
+			const conversationList = document.getElementById('conversation-list');
+
+			chatHeader.textContent = name;
+			messagesContainer.innerHTML = ''; // Limpar mensagens existentes
+
+			let currentDate = ''; // Variável para armazenar a data atual
+
+			// Limpar destaque de todos os itens da sidebar
+			const allConversations = conversationList.querySelectorAll('.conversation');
+			allConversations.forEach(item => item.classList.remove('active'));
+
+			// Encontrar o item da sidebar correspondente à conversa atual e adicionar a classe ativa
+			const selectedConversation = Array.from(allConversations).find(item => item.textContent === name);
+			if (selectedConversation) {
+				selectedConversation.classList.add('active');
+			}
+
+			try {
+				// Fazer novo pedido à API para obter mensagens atualizadas
+				const response = await fetch(`${API_BASE_URL}/${name}.txt`);
+				if (!response.ok) throw new Error(`Erro ao carregar mensagens para ${name}`);
+
+				const content = await response.text();
+				const newMessages = content
+					.split('\n')
+					.map(line => {
+						line = line.trim(); // Remover espaços extras
+
+						const match = line.match(/^\[([^\]]+)\]\[([^\]]+?)(?: \| \d+)?\](.*)$/);
+						if (match) {
+							const [, datetime, sender, message] = match;
+							const [date, time] = datetime.split(';'); // Separar data e hora
+							return { sender, time: `${date} ${time}`, message: message.trim() };
+						}
+						return null; // Ignorar linhas mal formatadas
+					})
+					.filter(msg => msg !== null);
+
+				// Eliminar duplicados (com base no conteúdo da mensagem)
+				const uniqueMessages = [];
+				const seenMessages = new Set();
+
+				[...existingMessages, ...newMessages].forEach(chat => {
+					const uniqueKey = `${chat.sender}-${chat.time}-${chat.message}`;
+					if (!seenMessages.has(uniqueKey)) {
+						seenMessages.add(uniqueKey);
+						uniqueMessages.push(chat);
+					}
+				});
+
+				uniqueMessages.forEach(chat => {
+					const messageDate = chat.time.split(' ')[0]; // Extrair a data (sem a hora)
+					const messageTime = chat.time.split(' ')[1]; // Extrair a hora
+
+					// Verificar se a data mudou
+					if (messageDate !== currentDate) {
+						// Adicionar uma nova seção com a data
+						const dateDiv = document.createElement('div');
+						dateDiv.classList.add('date-section');
+						dateDiv.textContent = messageDate;
+						messagesContainer.appendChild(dateDiv);
+
+						currentDate = messageDate; // Atualizar a data atual
+					}
+
+					// Criar a div da mensagem
+					const messageDiv = document.createElement('div');
+					messageDiv.classList.add('message');
+					messageDiv.classList.add(chat.sender === 'David Garcia' ? 'sent' : 'received');
+					messageDiv.innerHTML = `<div class="message_recipient">${chat.sender}: ${messageTime}</div><br><p>${chat.message}</p>`;
+					messagesContainer.appendChild(messageDiv);
+				});
+
+				// Rolar automaticamente para o final das mensagens
+				messagesContainer.scrollTo(0, messagesContainer.scrollHeight);
+
+			} catch (error) {
+				console.error(`Erro ao carregar mensagens para ${name}:`, error);
+				alert(`Erro ao carregar mensagens para ${name}.`);
+			}
+		}
+
+        // Inicializar a aplicação
+        async function init() {
+            const conversations = await loadConversations();
+            renderConversations(conversations);
+        }
+
+        init();
+    </script>
+</body>
+</html>
