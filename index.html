@@ -296,7 +296,7 @@
 					// Criar a div da mensagem
 					const messageDiv = document.createElement('div');
 					messageDiv.classList.add('message');
-					messageDiv.classList.add(chat.sender === 'Romeu Carvalho' ? 'sent' : 'received');
+					messageDiv.classList.add(chat.sender === 'David Garcia' ? 'sent' : 'received');
 					messageDiv.innerHTML = `<div class="message_recipient">${chat.sender}: ${messageTime}</div><br><p>${chat.message}</p>`;
 					messagesContainer.appendChild(messageDiv);
 				});
